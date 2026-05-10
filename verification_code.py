@@ -8,25 +8,24 @@ GEOM_A = """O -1.551 -0.115 0
 GEOM_B = """O  1.351  0.111 0
             H  1.680 -0.374 -0.759
             H  1.680 -0.374  0.759"""
+HARTREE_TO_KCAL = 627.5094740631
 
-def ccsdt_energy(mol):
-    mf = scf.RHF(mol)
-    mf.kernel()
-    mycc = cc.CCSD(mf)
-    mycc.kernel()
-    e_T = mycc.ccsd_t()
-    return mf.e_tot + mycc.e_corr + e_T
+def ccsdt_energy(atom_str):
+    mol = gto.M(atom=atom_str, basis="cc-pVDZ")
+    mf  = scf.RHF(mol).run()
+    cc_ = cc.CCSD(mf).run()
+    et  = cc_.ccsd_t()
+    return mf.e_tot + cc_.e_corr + et
 
-def _ghostify(geom):
-    return "\n".join("ghost-" + line.strip() for line in geom.strip().split("\n"))
+def ghost(atom_str):
+    out = []
+    for line in atom_str.strip().split("\n"):
+        sym, rest = line.split(None, 1)
+        out.append(f"GHOST-{sym} {rest}")
+    return "\n".join(out)
 
-dimer = gto.M(atom=GEOM_A + "\n" + GEOM_B, basis="cc-pvdz")
-mol_A = gto.M(atom=GEOM_A + "\n" + _ghostify(GEOM_B), basis="cc-pvdz")
-mol_B = gto.M(atom=_ghostify(GEOM_A) + "\n" + GEOM_B, basis="cc-pvdz")
-
-e_AB = ccsdt_energy(dimer)
-e_A  = ccsdt_energy(mol_A)
-e_B  = ccsdt_energy(mol_B)
-e_int_Ha = e_AB - e_A - e_B
-e_int = e_int_Ha * 627.509
-print(f"{e_int:.4f}")
+e_dimer = ccsdt_energy(GEOM_A + "\n" + GEOM_B)
+e_A     = ccsdt_energy(GEOM_A + "\n" + ghost(GEOM_B))
+e_B     = ccsdt_energy(ghost(GEOM_A) + "\n" + GEOM_B)
+e_int_kcal = (e_dimer - e_A - e_B) * HARTREE_TO_KCAL
+print(f"{e_int_kcal:.4f}")
